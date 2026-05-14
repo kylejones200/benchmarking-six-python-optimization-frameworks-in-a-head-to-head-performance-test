@@ -26,13 +26,13 @@ Every library solved exactly this model. I measured runtime (seconds), peak memo
 All solvers reached the same optimal cost of 17,972,000, confirming that the models were equivalent.
 
 ### Python-MIP + CBC
-Python-MIP offers a direct, modern API for linear and mixed-integer programming, with CBC and other solvers under the hood. In our test, it was the fastest of the bunch --- blazing through in **0.0228 seconds** with minimal memory use. Its API is straightforward, making it a strong choice for those who want speed and simplicity.
+Python-MIP offers a direct, modern API for linear and mixed-integer programming, with CBC and other solvers under the hood. In our test, it was the fastest of the bunch --- blazing through in 0.0228 seconds with minimal memory use. Its API is straightforward, making it a strong choice for those who want speed and simplicity.
 
 ### PuLP + CBC
-PuLP has been a Python LP staple for years, with a high-level, readable model definition style. It posted **0.0283 seconds** runtime, just a fraction slower than Python-MIP, and similarly light on memory. If readability and a well-established user base matter, PuLP remains a safe bet.
+PuLP has been a Python LP staple for years, with a high-level, readable model definition style. It posted 0.0283 seconds runtime, just a fraction slower than Python-MIP, and similarly light on memory. If readability and a well-established user base matter, PuLP remains a safe bet.
 
 ### PyOptInterface + HiGHS
-PyOptInterface (POI) is newer, designed for a clean, solver-agnostic interface. Paired with the HiGHS solver, it hit **0.0325 seconds** --- very close to the leaders. The API feels low-level but precise, appealing to those who value explicit control over every modeling detail.
+PyOptInterface (POI) is newer, designed for a clean, solver-agnostic interface. Paired with the HiGHS solver, it hit 0.0325 seconds --- very close to the leaders. The API feels low-level but precise, appealing to those who value explicit control over every modeling detail.
 
 ### Pyomo (CBC/HiGHS/GLPK)
 Pyomo is a heavyweight: it supports algebraic modeling across linear, nonlinear, and stochastic problems. That flexibility comes at a cost --- 0.0549 seconds runtime and modestly higher memory usage. For larger or more complex models, Pyomo's feature depth may outweigh the slight speed penalty.
