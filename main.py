@@ -43,8 +43,10 @@ try:
         Set,
         SolverFactory,
         Var,
-        minimize as pyomo_minimize,
         value,
+    )
+    from pyomo.environ import (
+        minimize as pyomo_minimize,
     )
 except ImportError:
     ConcreteModel = Constraint = NonNegativeReals = Objective = None
@@ -56,37 +58,58 @@ except ImportError:
 def make_problem(scale=1):
     months = ["M+5", "M+6"]
     tanks = ["Light", "Medium", "Heavy"]
-
-    capacity = pd.Series({"Light": 80_000, "Medium": 120_000, "Heavy": 100_000}, dtype=float) * scale
+    capacity = (
+        pd.Series({"Light": 80_000, "Medium": 120_000, "Heavy": 100_000}, dtype=float) * scale
+    )
     init_inv = pd.Series({"Light": 10_000, "Medium": 20_000, "Heavy": 15_000}, dtype=float) * scale
-
-    demand = pd.DataFrame({
-        "tank": np.repeat(tanks, len(months)),
-        "month": months * len(tanks),
-        "barrels": [50_000, 55_000, 70_000, 65_000, 60_000, 60_000],
-    })
+    demand = pd.DataFrame(
+        {
+            "tank": np.repeat(tanks, len(months)),
+            "month": months * len(tanks),
+            "barrels": [50_000, 55_000, 70_000, 65_000, 60_000, 60_000],
+        }
+    )
     demand["barrels"] = demand["barrels"] * scale
-
-    sources = pd.DataFrame({
-        "source": ["Foreign", "Canada", "Domestic"],
-        "lead": [3, 2, 1],
-        "cost": [62.0, 66.0, 70.0],
-        "max_M+5": [120_000, 90_000, 80_000],
-        "max_M+6": [120_000, 90_000, 80_000],
-    })
+    sources = pd.DataFrame(
+        {
+            "source": ["Foreign", "Canada", "Domestic"],
+            "lead": [3, 2, 1],
+            "cost": [62.0, 66.0, 70.0],
+            "max_M+5": [120_000, 90_000, 80_000],
+            "max_M+6": [120_000, 90_000, 80_000],
+        }
+    )
     sources[["max_M+5", "max_M+6"]] = sources[["max_M+5", "max_M+6"]] * scale
-
-    mix = pd.DataFrame({
-        "source": ["Foreign", "Foreign", "Foreign", "Canada", "Canada", "Canada", "Domestic", "Domestic", "Domestic"],
-        "tank": ["Light", "Medium", "Heavy"] * 3,
-        "frac": [0.10, 0.30, 0.60, 0.20, 0.50, 0.30, 0.50, 0.35, 0.15],
-    })
-
+    mix = pd.DataFrame(
+        {
+            "source": [
+                "Foreign",
+                "Foreign",
+                "Foreign",
+                "Canada",
+                "Canada",
+                "Canada",
+                "Domestic",
+                "Domestic",
+                "Domestic",
+            ],
+            "tank": ["Light", "Medium", "Heavy"] * 3,
+            "frac": [0.10, 0.30, 0.60, 0.20, 0.50, 0.30, 0.50, 0.35, 0.15],
+        }
+    )
     dem = demand.pivot(index="tank", columns="month", values="barrels").astype(float).fillna(0.0)
-    rout = mix.pivot(index="source", columns="tank", values="frac").reindex(sources["source"]).astype(float).fillna(0.0)
+    rout = (
+        mix.pivot(index="source", columns="tank", values="frac")
+        .reindex(sources["source"])
+        .astype(float)
+        .fillna(0.0)
+    )
     costs = sources.set_index("source")["cost"].astype(float)
-    smax = sources.set_index("source")[["max_M+5", "max_M+6"]].rename(columns={"max_M+5": "M+5", "max_M+6": "M+6"}).astype(float)
-
+    smax = (
+        sources.set_index("source")[["max_M+5", "max_M+6"]]
+        .rename(columns={"max_M+5": "M+5", "max_M+6": "M+6"})
+        .astype(float)
+    )
     return months, tanks, capacity, init_inv, dem, rout, costs, smax, sources
 
 
@@ -138,9 +161,7 @@ def solve_pyoframe(data):
     if pf is None:
         raise ImportError("pyoframe not installed")
     months, tanks, capacity, init_inv, dem, rout, costs, smax, sources = data
-
     m = pf.Model(solver="highs")
-
     order = {}
     for mo in months:
         v = pf.Variable(sources[["source"]], lb=0.0)
@@ -148,7 +169,6 @@ def solve_pyoframe(data):
         order[mo] = getattr(m, f"Order_{mo}")
 
     m.minimize = sum(pf.sum(over=["source"], expr=costs * order[mo]) for mo in months)
-
     for t in tanks:
         coef_s = rout[t]
         for mo in months:
@@ -161,7 +181,6 @@ def solve_pyoframe(data):
         setattr(m, f"max_{mo}", order[mo] <= smax[mo])
 
     m.optimize()
-
     frames = []
     for mo in months:
         tmp = order[mo].solution.to_pandas().rename(columns={"solution": "barrels"})
@@ -190,7 +209,9 @@ def solve_mip(data):
         for s in S:
             mdl += Order[s, mo] <= float(smax.loc[s, mo])
     mdl.optimize()
-    orders = pd.DataFrame([{"source": s, "month": mo, "barrels": Order[s, mo].x} for s in S for mo in M])
+    orders = pd.DataFrame(
+        [{"source": s, "month": mo, "barrels": Order[s, mo].x} for s in S for mo in M]
+    )
     return objective_from_orders(orders, costs), orders
 
 
@@ -198,12 +219,9 @@ def solve_poi_highs(data):
     if poi is None or highs is None:
         raise ImportError("pyoptinterface[highs] not installed")
     months, tanks, capacity, init_inv, dem, rout, costs, smax, sources = data
-
     model = highs.Model()
-
     S = list(sources["source"])
     M = months
-
     Order = {}
     for s in S:
         for mo in M:
@@ -219,14 +237,15 @@ def solve_poi_highs(data):
         for mo in M:
             obj += float(costs.loc[s]) * Order[(s, mo)]
     model.set_objective(obj, poi.ObjectiveSense.Minimize)
-
     for t in tanks:
         for mo in M:
             expr = 0.0
             for s in S:
                 expr += float(rout.loc[s, t]) * Order[(s, mo)]
             model.add_linear_constraint(expr + float(init_inv[t]) - float(dem.loc[t, mo]) >= 0.0)
-            model.add_linear_constraint(expr + float(init_inv[t]) - float(dem.loc[t, mo]) <= float(capacity[t]))
+            model.add_linear_constraint(
+                expr + float(init_inv[t]) - float(dem.loc[t, mo]) <= float(capacity[t])
+            )
 
     for mo in M:
         for s in S:
@@ -234,8 +253,11 @@ def solve_poi_highs(data):
 
     model.set_model_attribute(poi.ModelAttribute.Silent, True)
     model.optimize()
-
-    rows = [{"source": s, "month": mo, "barrels": model.get_value(Order[(s, mo)])} for s in S for mo in M]
+    rows = [
+        {"source": s, "month": mo, "barrels": model.get_value(Order[(s, mo)])}
+        for s in S
+        for mo in M
+    ]
     orders = pd.DataFrame(rows)
     total = float(orders.merge(costs.rename("cost"), on="source").eval("cost*barrels").sum())
     return total, orders
@@ -257,7 +279,9 @@ def solve_pulp(data):
         for s in S:
             prob += Order[(s, mo)] <= float(smax.loc[s, mo])
     prob.solve(pulp.PULP_CBC_CMD(msg=False))
-    orders = pd.DataFrame([{"source": s, "month": mo, "barrels": Order[(s, mo)].value()} for s in S for mo in M])
+    orders = pd.DataFrame(
+        [{"source": s, "month": mo, "barrels": Order[(s, mo)].value()} for s in S for mo in M]
+    )
     return objective_from_orders(orders, costs), orders
 
 
@@ -307,7 +331,9 @@ def solve_pyomo(data):
     else:
         raise RuntimeError("No Pyomo solver found (need 'cbc', 'highs', or 'glpk')")
     solver.solve(m, tee=False)
-    orders = pd.DataFrame([{"source": s, "month": mo, "barrels": float(value(m.Order[s, mo]))} for s in S for mo in M])
+    orders = pd.DataFrame(
+        [{"source": s, "month": mo, "barrels": float(value(m.Order[s, mo]))} for s in S for mo in M]
+    )
     return objective_from_orders(orders, costs), orders
 
 
@@ -318,12 +344,9 @@ def solve_cvxpy(data):
     T = tanks
     S_idx = {s: i for i, s in enumerate(S)}
     M_idx = {m: i for i, m in enumerate(M)}
-
     Order = cp.Variable((len(S), len(M)), nonneg=True)
-
     costs_vec = costs.reindex(S).to_numpy()[:, None]
     obj = cp.Minimize(cp.sum(cp.multiply(costs_vec, Order)))
-
     cons = []
     for t in T:
         r = rout.loc[S, t].to_numpy()
@@ -341,7 +364,9 @@ def solve_cvxpy(data):
 
     try:
         order_prob = cp.Problem(obj, cons)
-        order_prob.solve(solver=cp.ECOS, verbose=False, feastol=1e-8, reltol=1e-8, abstol=1e-8, max_iters=2000)
+        order_prob.solve(
+            solver=cp.ECOS, verbose=False, feastol=1e-8, reltol=1e-8, abstol=1e-8, max_iters=2000
+        )
     except Exception:
         order_prob = cp.Problem(obj, cons)
         order_prob.solve(solver=cp.OSQP, verbose=False, eps_abs=1e-8, eps_rel=1e-8, max_iter=100000)
@@ -352,18 +377,18 @@ def solve_cvxpy(data):
     rows = []
     for s in S:
         for mo in M:
-            rows.append({"source": s, "month": mo, "barrels": float(Order.value[S_idx[s], M_idx[mo]])})
+            rows.append(
+                {"source": s, "month": mo, "barrels": float(Order.value[S_idx[s], M_idx[mo]])}
+            )
     orders = pd.DataFrame(rows)
     return objective_from_orders(orders, costs), orders
 
 
 # -------- main --------
 
-
 if __name__ == "__main__":
     scale = 1
     data = make_problem(scale=scale)
-
     tests = [
         ("PyOFrame + HiGHS", lambda: solve_pyoframe(data)),
         ("Python-MIP + CBC", lambda: solve_mip(data)),
@@ -372,7 +397,6 @@ if __name__ == "__main__":
         ("Pyomo CBC/HiGHS/GLPK", lambda: solve_pyomo(data)),
         ("CVXPY + ECOS/OSQP", lambda: solve_cvxpy(data)),
     ]
-
     rows, solutions = [], {}
     for name, fn in tests:
         row, orders = bench(name, fn)
@@ -384,11 +408,9 @@ if __name__ == "__main__":
     df.sort_values(["Status", "Runtime (s)"], inplace=True, na_position="last")
     print("\n=== Benchmark Summary ===")
     print(df.to_string(index=False))
-
     out_csv = "benchmark_results.csv"
     df.to_csv(out_csv, index=False)
     print(f"\nWrote {out_csv}")
-
     ok = df[df["Status"] == "ok"]
     if not ok.empty:
         plt.figure(figsize=(8, 4))
@@ -402,7 +424,6 @@ if __name__ == "__main__":
         plt.savefig("benchmark_runtime.png")
         plt.show()
         print("Saved benchmark_runtime.png")
-
         plt.figure(figsize=(8, 4))
         plt.bar(ok["Library"], ok["Peak Memory (KB)"])
         plt.title("Peak Python-Tracked Memory in KB (Lower is better)")
