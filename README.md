@@ -11,14 +11,7 @@ I built a benchmark problem and running it across six modern Python optimization
 
 The test problem is a simplified **crude-oil supply LP**: sources, tanks, monthly demand, capacities, and shipping costs—minimize cost while meeting demand.
 
-## About
 
-Place the code for this article in this repository.
-The original article export is saved as `article.md`.
-
-## Files
-
-Add your `.ipynb`, `.py`, `.yaml`, `.js`, `.ts`, or other project files here.
 
 Run the benchmark: `uv sync && uv run python main.py` (writes `benchmark_results.csv` and timing plots).
 
